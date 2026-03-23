@@ -1,0 +1,350 @@
+import os
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from fastapi import Depends, Header, HTTPException, Security, status  # Added status
+from fastapi.security import APIKeyHeader
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from app.database import get_db
+from app.models.api_key import OpenAPIDB
+from app.redis import get_redis
+from app.services.api_key import ApiKeyService, AstronApiKeyService
+from app.services.execution import ExecutionService
+from app.services.user import UserService
+from app.services.websocket import WsManagerService, WsService
+from app.services.workflow import WorkflowService
+from app.utils.api_key import APIKeyUtils
+
+# 全局 WsManagerService 单例实例
+_ws_manager_service: WsManagerService | None = None
+
+# API Key 验证用的 APIKeyHeader
+API_KEY_HEADER = APIKeyHeader(name="Authorization", auto_error=False)
+
+
+def get_user_id_from_header(
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user_id: str | None = Header(default=None, alias="user_id"),
+) -> str:
+    """
+    从请求头中获取用户ID，优先解析 X-User-Id，如果不存在则解析 user_id
+    """
+    header_user_id = x_user_id or user_id
+
+    if header_user_id is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing X-User-Id or user_id header.",
+        )
+    return header_user_id
+
+
+async def verify_register_bearer_token(
+    token: str = Security(API_KEY_HEADER),
+) -> str:
+    """
+    验证注册接口的 Bearer Token (使用 Security + APIKeyHeader 方式)
+    用于astron-agent快速注册
+
+    使用示例:
+    @router.post("/register")
+    async def register_user(
+        request: UserRegisterRequest,
+        token: str = Depends(verify_register_bearer_token),
+    ):
+        ...
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+        )
+
+    # 验证 Bearer 格式
+    parts = token.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization header format",
+        )
+
+    bearer_token = parts[1]
+
+    # 验证 Token 是否正确
+    if bearer_token != "opensource-register-token":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    return bearer_token
+
+
+async def verify_getkey_bearer_token(
+    token: str = Security(API_KEY_HEADER),
+) -> str:
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+        )
+
+    # 验证 Bearer 格式
+    parts = token.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization header format",
+        )
+
+    bearer_token = parts[1]
+
+    # 验证 Token 是否正确
+    if bearer_token != "opensource-register-token":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    return bearer_token
+
+
+def extract_api_key_from_request(ctx) -> Optional[str]:
+    """
+    从请求上下文中提取API_KEY
+    MCP使用
+    """
+
+    # 尝试多种方式获取查询参数
+    query_params = ctx.request.query_params
+
+    if query_params:
+        # 如果是字典类型
+        if isinstance(query_params, dict):
+            return query_params.get("key")
+
+        # 如果是QueryParams对象（Starlette）
+        if hasattr(query_params, "get"):
+            return query_params.get("key")
+
+        # 如果是字符串类型的查询字符串
+        if isinstance(query_params, str):
+            from urllib.parse import parse_qs
+
+            parsed = parse_qs(query_params)
+            key_values = parsed.get("key", [])
+            return key_values[0] if key_values else None
+    return None
+
+
+async def get_user_id_from_api_key(
+    api_key_header: str = Security(API_KEY_HEADER),
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """
+    从 Authorization 请求头中获取 API Key，查询数据库得到 user_id
+    """
+    if api_key_header is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    parts = api_key_header.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    api_key = parts[1]
+
+    # 使用前缀匹配和哈希验证
+    keys = await db.execute(select(OpenAPIDB).where(OpenAPIDB.prefix == api_key[:8], OpenAPIDB.is_active == 1))
+    api_keys = keys.scalars().all()
+
+    for key in api_keys:
+        hashed_key = key.api_key
+        if APIKeyUtils.verify_api_key(api_key, hashed_key):
+            return str(key.user_id)
+
+    # 如果没有找到匹配的API key
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or inactive API key",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def get_user_id_with_fallback(
+    api_key_header: str = Security(API_KEY_HEADER),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user_id: str | None = Header(default=None, alias="user_id"),
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """
+    按优先级获取用户ID：
+    1. 首先尝试从Authorization Bearer token中获取API key并验证
+    2. 如果没有API key，则从X-User-Id或user_id header中获取
+    3. 如果都没有，则抛出401错误
+
+    用于get_workflows（既有可能本地调用，又有可能外部调用）
+
+    使用示例：
+    @router.get("/example")
+    async def example_endpoint(
+        user_id: str = Depends(get_user_id_with_fallback)
+    ):
+        return {"user_id": user_id}
+    """
+    # 首先尝试从API key获取用户ID
+    if api_key_header:
+        try:
+            parts = api_key_header.split()
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                api_key = parts[1]
+
+                # 使用前缀匹配和哈希验证
+                keys = await db.execute(
+                    select(OpenAPIDB).where(OpenAPIDB.prefix == api_key[:8], OpenAPIDB.is_active == 1)
+                )
+                api_keys = keys.scalars().all()
+
+                for key in api_keys:
+                    hashed_key = key.api_key
+                    if APIKeyUtils.verify_api_key(api_key, hashed_key):
+                        return str(key.user_id)
+
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication failed. Your API_KEY is not correct.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required. Please provide either a valid API key in Authorization header.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # 如果API key验证失败或不存在，尝试从header获取
+    header_user_id = x_user_id or user_id
+    if header_user_id:
+        return header_user_id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please provide either a valid API key in Authorization header or user_id in X-User-Id/user_id header.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+async def check_user_id_equality(
+    api_key_header: str = Security(API_KEY_HEADER),
+    user_id: str | None = Header(default=None, alias="user_id"),
+    db: AsyncSession = Depends(get_db),
+) -> bool:
+    """
+    使用示例：
+    @router.get("/example")
+    async def example_endpoint(
+        user_id: str = Depends(get_user_id_with_fallback)
+    ):
+        return {"user_id": user_id}
+    """
+    # 比较API_KEY对应的user_id和本地路由的user_id是否匹配
+    if api_key_header and user_id:
+        try:
+            parts = api_key_header.split()
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                api_key = parts[1]
+
+                # 使用前缀匹配和哈希验证
+                keys = await db.execute(
+                    select(OpenAPIDB).where(OpenAPIDB.prefix == api_key[:8], OpenAPIDB.is_active == 1)
+                )
+                api_keys = keys.scalars().all()
+                if not api_keys:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Authentication required. Please provide either a valid API key in Authorization header",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+
+                for key in api_keys:
+                    hashed_key = key.api_key
+                    if APIKeyUtils.verify_api_key(api_key, hashed_key):
+                        if str(key.user_id) == user_id:
+                            return True
+
+                return False
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required. Please provide either a valid API key in Authorization header",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required. Either API key or user_id is not provided.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+# 注意：get_uid_from_raw_key 函数已经被移动到 app.services.streamable_mcp.ToolsConfig 类中
+# 以避免创建多个数据库连接实例
+
+
+async def get_workflow_service(
+    db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)
+) -> WorkflowService:
+    """提供WorkflowService实例的依赖项"""
+    return WorkflowService(db, redis)
+
+
+async def get_execution_service(
+    db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)
+) -> ExecutionService:
+    """提供ExecutionService实例的依赖项"""
+    return ExecutionService(db, redis)
+
+
+async def get_api_key_service(db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)) -> ApiKeyService:
+    """提供ApiKeyService实例的依赖项"""
+    return ApiKeyService(db, redis)
+
+
+async def get_astron_api_key_service(
+    db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)
+) -> AstronApiKeyService:
+    """提供XcApiKeyService实例的依赖项"""
+    return AstronApiKeyService(db, redis)
+
+
+async def get_user_service(
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    api_key_service: ApiKeyService = Depends(get_api_key_service),
+) -> UserService:
+    """提供UserService实例的依赖项"""
+    return UserService(db, redis, api_key_service)
+
+
+async def get_ws_service() -> WsManagerService:
+    """提供 WsManagerService 单例实例的依赖项"""
+    global _ws_manager_service
+    if _ws_manager_service is None:
+        # 在多worker环境下，每个进程都有自己的实例
+        # 这是正常的，因为WebSocket连接是进程级别的
+        worker_id = os.getpid()
+        _ws_manager_service = WsManagerService()
+        # 可以在这里添加worker标识，便于调试
+        _ws_manager_service.worker_id = worker_id
+    return _ws_manager_service
