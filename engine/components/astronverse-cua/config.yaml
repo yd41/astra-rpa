@@ -18,6 +18,9 @@ atomic:
       - key: temperature
         title: 模型温度
         tip: 模型生成时的温度参数，控制输出的随机性，默认0
+      - key: model
+        title: 模型ID
+        tip: 配置使用的模型
     outputList:
       - key: computer_use_res
         title: 执行结果
@@ -42,6 +45,9 @@ atomic:
       - key: temperature
         title: 模型温度
         tip: 模型生成时的温度参数，控制输出的随机性，默认0
+      - key: model
+        title: 模型选择
+        tip: 可以选择使用的模型
     outputList:
       - key: computer_use_res
         title: 执行结果
@@ -66,6 +72,9 @@ atomic:
       - key: temperature
         title: 模型温度
         tip: 模型生成时的温度参数，控制输出的随机性，默认0
+      - key: model
+        title: 模型选择
+        tip: 可以选择使用的模型
     outputList:
       - key: computer_use_res
         title: 执行结果
@@ -90,6 +99,9 @@ atomic:
       - key: temperature
         title: 模型温度
         tip: 模型生成时的温度参数，控制输出的随机性，默认0
+      - key: model
+        title: 模型选择
+        tip: 可以选择使用的模型
     outputList:
       - key: computer_use_res
         title: 执行结果
@@ -114,6 +126,9 @@ atomic:
       - key: temperature
         title: 模型温度
         tip: 模型生成时的温度参数，控制输出的随机性，默认0
+      - key: model
+        title: 模型选择
+        tip: 可以选择使用的模型
     outputList:
       - key: computer_use_res
         title: 执行结果

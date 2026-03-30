@@ -19,7 +19,7 @@ import httpx
 
 from app.config import get_settings
 from app.logger import get_logger
-from app.schemas.ocr import OCRGeneralResponseBody
+from app.schemas.ocr import OCRGeneralDecodedResponseBody, OCRGeneralResponseBody
 from app.utils.ocr.base import OCRError
 from app.utils.ocr.error_policy import classify_ocr_failure
 
@@ -96,12 +96,24 @@ def _build_request_payload(image_base64: str, encoding: str = "jpg", status: int
     }
 
 
+def _decode_general_result_text(text_base64: str) -> dict[str, Any]:
+    try:
+        decoded = base64.b64decode(text_base64).decode("utf-8")
+        parsed = json.loads(decoded)
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise OCRError("Failed to decode OCR general result payload.") from exc
+
+    if not isinstance(parsed, dict):
+        raise OCRError("Decoded OCR general result payload must be a JSON object.")
+    return parsed
+
+
 async def recognize_text_from_image(
     image_base64: str,
     image_encoding: str = "jpg",
     status: int = 3,
     timeout: float = 30.0,
-) -> OCRGeneralResponseBody:
+) -> OCRGeneralDecodedResponseBody:
     try:
         request_payload = _build_request_payload(image_base64, image_encoding, status)
         authenticated_url = assemble_ws_auth_url(BASE_URL)
@@ -130,8 +142,12 @@ async def recognize_text_from_image(
                 category=decision.category.value,
             )
 
+        if not model.payload or not model.payload.result.text:
+            raise OCRError("OCR general response payload is empty.")
+
+        decoded_result = _decode_general_result_text(model.payload.result.text)
         logger.info("OCR processing completed successfully")
-        return model
+        return OCRGeneralDecodedResponseBody(header=model.header, data=decoded_result)
 
     except httpx.HTTPError:
         raise

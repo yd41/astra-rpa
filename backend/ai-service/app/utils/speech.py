@@ -30,6 +30,7 @@ SHORT_IAT_CHINESE_URL = "wss://iat.xf-yun.com/v1"
 SHORT_IAT_MULTILINGUAL_URL = "wss://iat.cn-huabei-1.xf-yun.com/v1"
 SHORT_IAT_FRAME_SIZE = 1280
 SHORT_IAT_FRAME_INTERVAL_SECONDS = 0.04
+SHORT_IAT_SUPPORTED_SAMPLE_RATES = {8000, 16000}
 
 
 def decode_audio_base64(audio_base64: str) -> bytes:
@@ -55,6 +56,25 @@ def get_audio_sample_rate(audio_bytes: bytes, filename: str, fallback: int = 160
     return int(sample_rate)
 
 
+def validate_short_audio_sample_rate(sample_rate: int, filename: str) -> int:
+    if sample_rate not in SHORT_IAT_SUPPORTED_SAMPLE_RATES:
+        raise SpeechError(
+            f"Short audio ASR only supports 8000Hz or 16000Hz audio, but got {sample_rate}Hz for {filename}. "
+            "Please convert the audio sample rate and try again."
+        )
+    return sample_rate
+
+
+def normalize_short_iat_error_message(message: str) -> str:
+    lowered = (message or "").strip().lower()
+    if "licc fail" in lowered:
+        return (
+            "XFYun short ASR authorization failed for the current AppID. "
+            "Please confirm the AppID/APIKey/APISecret match and that the AppID has the speech dictation service enabled."
+        )
+    return message
+
+
 def prepare_short_audio_payload(audio_bytes: bytes, filename: str) -> tuple[bytes, str, int]:
     # 短音频识别适用于日常说话场景，通常是 60 秒以内的语音。
     # 长时间录音文件应走 transcription / IFASR LLM，而不是短音频 websocket 识别。
@@ -64,13 +84,15 @@ def prepare_short_audio_payload(audio_bytes: bytes, filename: str) -> tuple[byte
             with wave.open(BytesIO(audio_bytes), "rb") as wav_file:
                 if wav_file.getnchannels() != 1 or wav_file.getsampwidth() != 2:
                     raise SpeechError("Short audio ASR requires mono 16-bit WAV audio.")
-                return wav_file.readframes(wav_file.getnframes()), "raw", int(wav_file.getframerate())
+                sample_rate = validate_short_audio_sample_rate(int(wav_file.getframerate()), filename)
+                return wav_file.readframes(wav_file.getnframes()), "raw", sample_rate
         except SpeechError:
             raise
         except Exception as exc:
             raise SpeechError("Unable to parse WAV audio.") from exc
     if suffix == "mp3":
-        return audio_bytes, "lame", get_audio_sample_rate(audio_bytes, filename)
+        sample_rate = validate_short_audio_sample_rate(get_audio_sample_rate(audio_bytes, filename), filename)
+        return audio_bytes, "lame", sample_rate
     if suffix == "pcm":
         return audio_bytes, "raw", 16000
     raise SpeechError("Short audio ASR currently supports wav/mp3/pcm files only.")
@@ -205,7 +227,7 @@ async def recognize_short_iat(audio_bytes: bytes, filename: str, language: str) 
                     code = int(header.get("code", 0))
                     if code != 0:
                         message_text = header.get("message") or payload.get("message") or f"code={code}"
-                        raise SpeechError(f"XFYun short ASR failed: {message_text}")
+                        raise SpeechError(f"XFYun short ASR failed: {normalize_short_iat_error_message(message_text)}")
 
                     result = ((payload.get("payload") or {}).get("result") or {})
                     result_text_base64 = result.get("text")

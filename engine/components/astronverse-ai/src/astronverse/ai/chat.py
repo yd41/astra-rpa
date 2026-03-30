@@ -10,7 +10,7 @@ from typing import Optional
 from astronverse.actionlib import AtomicFormType, AtomicFormTypeMeta, DynamicsItem
 from astronverse.actionlib.atomic import atomicMg
 from astronverse.ai import LLMModelTypes
-from astronverse.ai.api.llm import DEFAULT_MODEL, chat_normal, chat_streamable
+from astronverse.ai.api.llm import  chat_normal, chat_streamable
 from astronverse.ai.error import *
 from astronverse.ai.prompt.g_chat import prompt_generate_question
 from astronverse.ai.utils.extract import FileExtractor
@@ -201,6 +201,15 @@ class ChatAI:
                     params={"filters": [], "file_type": "file"},
                 ),
             ),
+            atomicMg.param(
+                "custom_model",
+                dynamics=[
+                    DynamicsItem(
+                        key="$this.custom_model.show",
+                        expression="return $this.model.value == '{}'".format(LLMModelTypes.CUSTOM_MODEL.value),
+                    )
+                ],
+            ),
         ],
         outputList=[atomicMg.param("knowledge_chat_res", types="Dict")],
     )
@@ -208,6 +217,8 @@ class ChatAI:
         file_path: str,
         is_save: bool = False,
         max_turns: int = 20,
+        model: LLMModelTypes = LLMModelTypes.DEEPSEEK_V3_2,
+        custom_model: str = "",
     ):
         """
         知识库问答
@@ -219,6 +230,11 @@ class ChatAI:
         Return:
             `dict`, 选择导出的记录
         """
+        if model == LLMModelTypes.CUSTOM_MODEL and custom_model:
+            model = custom_model
+        else:
+            model = model.value
+
         # 提取文件内容
         file_content = ChatAI._extract_file_content(file_path)
 
@@ -248,6 +264,7 @@ class ChatAI:
                 "is_save": str(int(is_save)),
                 "questions": "$-$".join(output),
                 "file_path": file_path,
+                "model": model,
             }
             ws.send_reply(
                 {"data": {"name": "multichat", "params": params, "content": file_content[:5000], "height": 700}},
@@ -266,7 +283,7 @@ class ChatAI:
         return res
 
     @staticmethod
-    def streamable_response(inputs: list, model: str = DEFAULT_MODEL):
+    def streamable_response(inputs: list, model: str ):
         """Stream model responses accumulating content and reasoning lists.
 
         Args:

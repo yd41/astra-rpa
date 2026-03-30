@@ -21,7 +21,7 @@ long_timeout = httpx.Timeout(
 )
 
 
-async def chat_completions(params: ChatCompletionParam, key: str = API_KEY, endpoint: str = API_ENDPOINT):
+async def  chat_completions(params: ChatCompletionParam, key: str = API_KEY, endpoint: str = API_ENDPOINT):
     logger.info("Processing chat completion request...")
     logger.info(f"Request params: {params}")
     # 构造请求参数

@@ -6,12 +6,20 @@ from typing import Any, Optional
 from fastapi import UploadFile
 
 from app.logger import get_logger
-from app.schemas.ocr import PDFOCRResponse
+from app.schemas.ocr import PDFOCRResponsePayload
 from app.utils.ocr.base import OCRError, XFYunOCRClient
 from app.utils.ocr.config import PDF_OCR_CONFIG
 from app.utils.ocr.error_policy import classify_ocr_failure
 
 logger = get_logger(__name__)
+
+
+def _extract_pdf_error_message(result: dict[str, Any]) -> str:
+    for key in ("desc", "message", "msg", "errorMsg", "detail"):
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "Unknown error"
 
 
 class PDFOCRClient(XFYunOCRClient):
@@ -39,15 +47,18 @@ class PDFOCRClient(XFYunOCRClient):
 
             response = await self._make_request("POST", url, data=data, files=files)
         else:
-            # 使用 URL
-            data = {"pdfUrl": pdf_url, "exportFormat": export_format}
-            response = await self._make_request("POST", url, data=data)
+            # URL 模式也按 multipart/form-data 提交
+            files = {
+                "pdfUrl": (None, pdf_url),
+                "exportFormat": (None, export_format),
+            }
+            response = await self._make_request("POST", url, files=files)
 
         result = response.json()
 
         # 检查响应状态 (flag 是布尔值)
         if not result.get("flag"):
-            error_msg = result.get("desc", "Unknown error")
+            error_msg = _extract_pdf_error_message(result)
             decision = classify_ocr_failure(result.get("code"), error_msg)
             raise OCRError(
                 error_msg,
@@ -68,7 +79,7 @@ class PDFOCRClient(XFYunOCRClient):
         result = response.json()
 
         if not result.get("flag"):
-            error_msg = result.get("desc", "Unknown error")
+            error_msg = _extract_pdf_error_message(result)
             decision = classify_ocr_failure(result.get("code"), error_msg)
             raise OCRError(
                 error_msg,
@@ -112,7 +123,7 @@ class PDFOCRClient(XFYunOCRClient):
 
     async def recognize(
         self, file: Optional[UploadFile] = None, pdf_url: Optional[str] = None, export_format: str = "json"
-    ) -> PDFOCRResponse:
+    ) -> PDFOCRResponsePayload:
         """
         识别 PDF 文档.
 
@@ -122,7 +133,7 @@ class PDFOCRClient(XFYunOCRClient):
             export_format: 导出格式 (word, markdown, json)
 
         Returns:
-            PDFOCRResponse: 识别结果
+            PDFOCRResponsePayload: 识别结果 payload
 
         Raises:
             OCRError: 识别失败时抛出
@@ -141,7 +152,7 @@ class PDFOCRClient(XFYunOCRClient):
             completed_data = await self._poll_task_completion(task_no)
 
             # 构建响应
-            response = PDFOCRResponse(
+            response = PDFOCRResponsePayload(
                 task_no=task_no,
                 status=completed_data.get("status", "unknown"),
                 page_count=len(completed_data.get("pageList", [])) if completed_data.get("pageList") else 0,

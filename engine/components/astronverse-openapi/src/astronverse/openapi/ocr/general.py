@@ -1,5 +1,10 @@
+import base64
+import os
+
 from astronverse.actionlib.types import PATH
-from astronverse.openapi.ocr._common import _run_multipart_ocr
+from astronverse.openapi import utils
+from astronverse.openapi.client import GatewayClient
+from astronverse.openapi.error import BaseException, IMAGE_EMPTY
 
 
 def ocr_general(
@@ -10,8 +15,24 @@ def ocr_general(
     dst_file: PATH = "",
     dst_file_name: str = "general_ocr",
 ) -> list:
-    return _run_multipart_ocr(
-        "/ocr/general",
-        is_multi, src_file, src_dir,
-        is_save, dst_file, dst_file_name,
-    )
+    if is_multi:
+        files = utils.generate_src_files(src_dir)
+        if not files:
+            raise BaseException(IMAGE_EMPTY, "图像文件夹不存在或为空")
+    else:
+        files = utils.generate_src_files(src_file)
+        if not files:
+            raise BaseException(IMAGE_EMPTY, "图像路径不存在或格式错误")
+
+    results = []
+    for fp in files:
+        with open(fp, "rb") as f:
+            image_b64 = base64.b64encode(f.read()).decode("utf-8")
+        ext = os.path.splitext(fp)[1].lstrip(".").lower() or "jpg"
+        resp = GatewayClient.post("/ocr/general", {"image": image_b64, "encoding": ext, "status": 3})
+        results.append(resp)
+
+    if is_save and results:
+        utils.write_to_excel(dst_file, dst_file_name, {}, results)
+
+    return results

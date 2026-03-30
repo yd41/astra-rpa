@@ -29,9 +29,8 @@ async def chat(
     points_context: PointsContext = Depends(
         PointChecker(get_settings().AICHAT_POINTS_COST, PointTransactionType.AICHAT_COST),
     ),
-):
+):  
     response = await chat_completions(params, API_KEY, API_ENDPOINT)
-
     # 处理成功，扣除积分，返回响应
     await points_context.deduct_points()
     return response

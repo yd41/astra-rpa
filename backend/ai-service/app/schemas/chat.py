@@ -2,11 +2,10 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-DEFAULT_MODEL = "maas/deepseek-v3.2"
 
 
 class ChatCompletionParam(BaseModel):
-    model: str = Field(DEFAULT_MODEL, examples=[DEFAULT_MODEL])
+    model: str = Field("", examples=["claude-sonnet-4-6"])
     stream: bool = Field(False, examples=[True])
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0, examples=[0.7])
     max_tokens: Optional[int] = Field(None, examples=[4096])
@@ -26,7 +25,7 @@ class ChatCompletionParam(BaseModel):
 
 
 class ChatPromptParam(BaseModel):
-    model: str = Field(DEFAULT_MODEL, examples=[DEFAULT_MODEL])
+    model: str = Field("", examples=["claude-sonnet-4-6"])
     stream: bool = Field(False, examples=[True])
     prompt_type: str = Field(
         ...,

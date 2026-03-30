@@ -195,6 +195,7 @@ class CustomActionScreen:
         self,
         max_steps: int = 20,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         初始化Agent
@@ -202,10 +203,19 @@ class CustomActionScreen:
         Args:
             max_steps: 最大执行步数
             temperature: 模型温度参数
+            model: 模型ID
         """
 
         self.max_steps = max_steps
         self.temperature = temperature
+        self.model = model
+
+        # 验证 model 参数
+        if not self.model or self.model.strip() == "":
+            raise ValueError(
+                "model 参数不能为空！请在流程编辑器中配置 model 参数。\n"
+                "例如：doubao-seed-1-8-251228"
+            )
 
         # 设置截图目录
         self.screenshot_dir = Path(tempfile.mkdtemp(prefix="cua_agent_"))
@@ -322,7 +332,7 @@ class CustomActionScreen:
 
         try:
             # 发送 API
-            request_body = {"messages": messages}
+            request_body = {"messages": messages, "model": self.model}
             response = requests.post(API_URL, json=request_body)
             response.raise_for_status()  # 检查请求是否成功
 

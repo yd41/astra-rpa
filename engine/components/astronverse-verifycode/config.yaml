@@ -76,7 +76,229 @@ atomic:
       - key: click_positions
         title: 点击位置
         tip: 返回验证码点击的坐标位置
+  VerifyCode.jfbym_custom_api:
+    title: 云码验证码识别
+    comment: 调用云码验证码识别服务，识别图片中的验证码结果
+    icon: captcha-text
+    helpManual: ''
+    inputList:
+    - key: type
+      title: 验证码类型
+      tip: 输入云码支持的验证码类型编号
+    - key: image
+      title: 验证码图片
+      tip: 输入待识别验证码图片的 base64 内容
+    - key: direction
+      title: 提示位置
+      tip: 某些点选类验证码需要传入提示信息相对图片的位置
+    outputList:
+    - key: data
+      title: 验证码识别结果对象
+      tip: 输出云码验证码识别结果对象
+  VerifyCode.jfbym_aliyun_slider:
+    title: 阿里滑块验证
+    comment: 识别阿里滑块验证码的正确移动距离，并返回滑块到缺口的像素距离
+    icon: captcha-slider
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: extra
+      title: 提示对象
+      tip: 验证码提示词
+    - key: refresh_pick
+      title: 刷新对象
+      tip: 刷新按钮元素
+    - key: slider_pick
+      title: 滑块对象
+      tip: 待拖动的滑块元素
+    - key: picture_pick
+      title: 背景图片对象
+      tip: 待识别的背景图，请尽可能和展示的例图一致，左右部分不要增加额外的白边，黑边
+    outputList:
+    - key: drag_distance
+      title: 移动距离
+      tip: 基于所传待验证图片中滑块到正确缺口的像素距离
+  VerifyCode.jfbym_click_order:
+    title: 通用文字点选验证码（按语序）
+    comment: 识别通用文字点选验证码的点击位置，并返回待点击元素的坐标位置信息
+    icon: captcha-click
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: picture_pick
+      title: 点选图片对象
+      tip: 待识别的点选背景图
+    - key: confirm_pick
+      title: 确定按钮对象
+      tip: 选择验证码点选完成后的确定按钮元素
+    outputList:
+    - key: click_positions
+      title: 点击位置
+      tip: 待点击元素的坐标位置信息
+  VerifyCode.jfbym_spatial_reasoning_click:
+    title: 空间推理点选验证（相同物体）
+    comment: 识别空间推理点选验证码的点击位置，并返回待点击元素的坐标位置信息
+    icon: captcha-click
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: picture_pick
+      title: 点选图片对象
+      tip: 待识别的点选背景图
+    - key: confirm_pick
+      title: 确定按钮对象
+      tip: 选择验证码点选完成后的确定按钮元素
+    outputList:
+    - key: click_positions
+      title: 点击位置
+      tip: 待点击元素的坐标位置信息
+  VerifyCode.jfbym_tencent_grid:
+    title: 腾讯六宫格验证
+    comment: 识别腾讯六宫格验证码的点击位置，并返回待点击元素的坐标位置信息
+    icon: captcha-click
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: extra
+      title: 提示对象
+      tip: 验证码补充提示词
+    - key: picture_pick
+      title: 背景图片对象
+      tip: 待识别处理图片
+    - key: confirm_pick
+      title: 确定按钮对象
+      tip: 选择验证码点选完成后的确定按钮元素
+    outputList:
+    - key: click_positions
+      title: 点击位置信息
+      tip: 待点击元素的坐标位置信息
+  VerifyCode.jfbym_rotate:
+    title: 通用旋转验证
+    comment: 识别通用旋转验证码的转正角度，并返回图片转正需要的顺时针度数
+    icon: process-captcha
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: picture_pick
+      title: 旋转图片对象
+      tip: 待旋转的图片
+    - key: slider_pick
+      title: 滑块对象
+      tip: 待拖动的滑块元素
+    - key: bar_pick
+      title: 滑动条对象
+      tip: 请上传完整的滑动条元素
+    - key: max_angle
+      title: 图片旋转最大角度
+      tip: 滑动条拉到尽头后图片的旋转角度
+    outputList:
+    - key: rotate_angle
+      title: 旋转角度
+      tip: 图片转正需要的顺时针度数
+  VerifyCode.jfbym_double_rotate:
+    title: 通用双圈旋转验证
+    comment: 识别通用双圈旋转验证码的转正角度，并返回图片转正需要的顺时针度数
+    icon: process-captcha
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: out_ring_pick
+      title: 外圈图片对象
+      tip: 选择待识别的外圈图片元素
+    - key: inner_circle_pick
+      title: 内圈图片对象
+      tip: 选择待识别的内圈图片元素
+    - key: slider_pick
+      title: 滑块对象
+      tip: 待拖动的滑块元素
+    - key: bar_pick
+      title: 滑动条对象
+      tip: 请上传完整的滑动条元素
+    - key: max_angle
+      title: 图片旋转最大角度
+      tip: 滑动条拉到尽头后图片的旋转角度
+    outputList:
+    - key: rotate_angle
+      title: 旋转角度
+      tip: 图片转正需要的顺时针度数
+  VerifyCode.jfbym_track:
+    title: 通用轨迹验证
+    comment: 识别通用轨迹验证码的轨迹坐标，并返回待绘制轨迹的坐标信息
+    icon: process-captcha
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: picture_pick
+      title: 背景图片对象
+      tip: 待识别的轨迹背景图
+    outputList:
+    - key: track_coordinates
+      title: 轨迹坐标
+      tip: 待绘制轨迹的坐标信息
+  VerifyCode.jfbym_math_digit:
+    title: 通用数字计算验证
+    comment: 识别通用数字计算验证码的答案，并返回数字计算题结果
+    icon: captcha-text
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: picture_pick
+      title: 验证码图片对象
+      tip: 待识别的数字计算题图片
+    - key: fill_input
+      title: 是否填写输入框
+      tip: 是否将识别结果填写到输入框中
+    - key: input_pick
+      title: 输入框对象
+      tip: 选择用于填写计算结果的输入框元素
+    outputList:
+    - key: calculation_result
+      title: 计算结果
+      tip: 数字计算题答案
+  VerifyCode.jfbym_math_chinese:
+    title: 通用中文计算验证
+    comment: 识别通用中文计算验证码的答案，并返回中文计算题结果
+    icon: captcha-text
+    helpManual: ''
+    inputList:
+    - key: browser_obj
+      title: 浏览器对象
+      tip: 选择待处理验证码所在的浏览器对象
+    - key: picture_pick
+      title: 验证码图片对象
+      tip: 待识别的中文计算题图片
+    - key: fill_input
+      title: 是否填写输入框
+      tip: 是否将识别结果填写到输入框中
+    - key: input_pick
+      title: 输入框对象
+      tip: 选择用于填写计算结果的输入框元素
+    outputList:
+    - key: calculation_result
+      title: 计算结果
+      tip: 中文计算题答案
 options:
+  max_angle:
+    - value: '360'
+      label: '360'
+    - value: '180'
+      label: '180'
   PictureCodeType:
     - value: '10110'
       label: 通用数英验证码1-4位

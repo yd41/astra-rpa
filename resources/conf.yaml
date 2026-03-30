@@ -1,4 +1,0 @@
-remote_addr: http://localhost:32742/
-skip_engine_start: false
-app_auth_type: uap
-app_edition: saasa

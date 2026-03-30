@@ -5,29 +5,21 @@ import time
 from io import BytesIO
 
 import pyautogui
-import requests
 from astronverse.actionlib.logger import logger
 from astronverse.browser import ElementGetAttributeTypeFlag
 from astronverse.locator import smooth_move
-from astronverse.verifycode import VerifyCodeConfig
+from astronverse.verifycode.jfbym import extract_jfbym_result, jfbym_custom_api
 
 
 class VerifyCodeCore:
     @staticmethod
     def get_api_result(api_type: str, pic_element_base64: str, **kwargs):
-        data = {
-            "image": pic_element_base64,
-            "type": api_type,
-        }
-        if kwargs.get("direction"):
-            data["direction"] = kwargs.get("direction", "")
-
-        headers = {
-            "Content-Type": "application/json",
-        }
-        response = requests.post(VerifyCodeConfig.url, headers=headers, json=data).json()
-        result = response["data"]["data"]
-        return result
+        response = jfbym_custom_api(
+            type=api_type,
+            image=pic_element_base64,
+            direction=kwargs.get("direction", ""),
+        )
+        return extract_jfbym_result(response)
 
     @staticmethod
     def get_base64_screenshot(left, top, width, height):

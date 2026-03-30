@@ -4,9 +4,19 @@ from astronverse.actionlib.atomic import atomicMg
 
 
 class VerifyCodeConfig:
-    url = "http://127.0.0.1:{}/api/rpa-ai-service/jfbym/customApi".format(
-        atomicMg.cfg().get("GATEWAY_PORT") if atomicMg.cfg().get("GATEWAY_PORT") else "13159"
-    )
+    @staticmethod
+    def gateway_port() -> str:
+        return str(atomicMg.cfg().get("GATEWAY_PORT") if atomicMg.cfg().get("GATEWAY_PORT") else "13159")
+
+    @staticmethod
+    def gateway_base_url() -> str:
+        return f"http://127.0.0.1:{VerifyCodeConfig.gateway_port()}/api/rpa-ai-service"
+
+    @staticmethod
+    def jfbym_url() -> str:
+        return f"{VerifyCodeConfig.gateway_base_url()}/jfbym/customApi"
+
+    url = ""
 
 
 class PictureCodeType(Enum):
@@ -28,3 +38,6 @@ class ElementGetAttributeTypeFlag(Enum):
     GetAttribute = "getAttribute"
     GetPosition = "getPosition"
     GetSelection = "getSelection"
+
+
+VerifyCodeConfig.url = VerifyCodeConfig.jfbym_url()

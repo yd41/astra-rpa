@@ -63,6 +63,7 @@ class ComputerUseAgent:
         self,
         max_steps: int = 20,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         初始化Agent
@@ -70,10 +71,19 @@ class ComputerUseAgent:
         Args:
             max_steps: 最大执行步数
             temperature: 模型温度参数
+            model: 模型ID
         """
 
         self.max_steps = max_steps
         self.temperature = temperature
+        self.model = model
+
+        # 验证 model 参数
+        if not self.model or self.model.strip() == "":
+            raise ValueError(
+                "model 参数不能为空！请在流程编辑器中配置 model 参数。\n"
+                "例如：doubao-seed-1-8-251228"
+            )
 
         # 设置截图目录
         self.screenshot_dir = Path(tempfile.mkdtemp(prefix="cua_agent_"))
@@ -301,8 +311,17 @@ class ComputerUseAgent:
 
         try:
             # 发送 API 请求
-            request_body = {"messages": messages}
+            request_body = {"messages": messages, "model": self.model}
+            logger.info(f"[CUA] 发送请求到 {API_URL}")
+            logger.info(f"[CUA] model 值: '{self.model}' (长度: {len(self.model)})")
+            logger.info(f"[CUA] 请求体: {json.dumps(request_body, ensure_ascii=False)[:200]}")
+
             response = requests.post(API_URL, json=request_body)
+
+            logger.info(f"[CUA] 响应状态码: {response.status_code}")
+            if response.status_code != 200:
+                logger.error(f"[CUA] 错误响应: {response.text}")
+
             response.raise_for_status()  # 检查请求是否成功
 
             # 返回模型生成的回复
@@ -551,6 +570,7 @@ class ComputerUse:
             atomicMg.param("instruction", types="Str"),
             atomicMg.param("max_steps", types="Int", required=False),
             atomicMg.param("temperature", types="Float", required=False),
+            atomicMg.param("model", types="Str", required=True),
         ],
         outputList=[
             atomicMg.param("computer_use_res", types="Dict"),
@@ -560,6 +580,7 @@ class ComputerUse:
         instruction: str,
         max_steps: int = 20,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         运行计算机使用代理任务
@@ -576,6 +597,7 @@ class ComputerUse:
         agent = ComputerUseAgent(
             max_steps=max_steps,
             temperature=temperature,
+            model=model,
         )
         result = agent.run(instruction)
 
@@ -595,6 +617,7 @@ class ComputerUse:
             atomicMg.param("instruction", types="Str"),
             atomicMg.param("max_steps", types="Int", required=False),
             atomicMg.param("temperature", types="Float", required=False),
+            atomicMg.param("model", types="Str", required=True),
         ],
         outputList=[
             atomicMg.param("computer_use_res", types="Dict"),
@@ -604,6 +627,7 @@ class ComputerUse:
         instruction: str,
         max_steps: int = 20,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         自定义AI操作屏幕
@@ -620,6 +644,7 @@ class ComputerUse:
         agent = CustomActionScreen(
             max_steps=max_steps,
             temperature=temperature,
+            model=model,
         )
         result = agent.run(instruction)
 
@@ -641,6 +666,7 @@ class ComputerUse:
             atomicMg.param("instruction", types="Str", default="帮我从屏幕中提取数据，并返回 JSON 格式。"),
             atomicMg.param("max_steps", types="Int", required=False),
             atomicMg.param("temperature", types="Float", required=False),
+            atomicMg.param("model", types="Str", required=True),
         ],
         outputList=[
             atomicMg.param("computer_use_res", types="Dict"),
@@ -650,6 +676,7 @@ class ComputerUse:
         instruction: str,
         max_steps: int = 1,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         提取屏幕数据
@@ -666,6 +693,7 @@ class ComputerUse:
         agent = CustomActionScreen(
             max_steps=max_steps,
             temperature=temperature,
+            model=model,
         )
         result = agent.run(instruction)
 
@@ -687,6 +715,7 @@ class ComputerUse:
             atomicMg.param("instruction", types="Str", default="帮我将 [数据内容] 填写到屏幕中的表单。数据内容："),
             atomicMg.param("max_steps", types="Int", required=False),
             atomicMg.param("temperature", types="Float", required=False),
+            atomicMg.param("model", types="Str", required=True),
         ],
         outputList=[
             atomicMg.param("computer_use_res", types="Dict"),
@@ -696,6 +725,7 @@ class ComputerUse:
         instruction: str,
         max_steps: int = 20,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         填写表单
@@ -712,6 +742,7 @@ class ComputerUse:
         agent = CustomActionScreen(
             max_steps=max_steps,
             temperature=temperature,
+            model=model,
         )
         result = agent.run(instruction)
 
@@ -733,6 +764,7 @@ class ComputerUse:
             atomicMg.param("instruction", types="Str", default="帮我处理并关闭屏幕中的验证码。"),
             atomicMg.param("max_steps", types="Int", required=False),
             atomicMg.param("temperature", types="Float", required=False),
+            atomicMg.param("model", types="Str", required=True),
         ],
         outputList=[
             atomicMg.param("computer_use_res", types="Dict"),
@@ -742,6 +774,7 @@ class ComputerUse:
         instruction: str,
         max_steps: int = 20,
         temperature: float = 0.0,
+        model: str = "",
     ):
         """
         处理验证码
@@ -758,6 +791,7 @@ class ComputerUse:
         agent = CustomActionScreen(
             max_steps=max_steps,
             temperature=temperature,
+            model=model,
         )
         result = agent.run(instruction)
 

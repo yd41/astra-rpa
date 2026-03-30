@@ -15,10 +15,9 @@ API_URL = "http://127.0.0.1:{}/api/rpa-ai-service/v1/chat/completions".format(
 PROMPT_URL = "http://127.0.0.1:{}/api/rpa-ai-service/v1/chat/prompt".format(
     atomicMg.cfg().get("GATEWAY_PORT") if atomicMg.cfg().get("GATEWAY_PORT") else "13159"
 )
-DEFAULT_MODEL = "xopdeepseekv32"
 
 
-def chat_streamable(messages: Any, model: str = DEFAULT_MODEL):
+def chat_streamable(messages: Any, model: str):
     """
     调用远端大模型
 
@@ -44,12 +43,16 @@ def chat_streamable(messages: Any, model: str = DEFAULT_MODEL):
             if event.data and event.data != "[DONE]":
                 response_json = json.loads(event.data)
                 if response_json.get("choices"):
-                    yield response_json["choices"][0]["delta"]["content"]
+                    choice = response_json["choices"][0] or {}
+                    delta = choice.get("delta") or {}
+                    content = delta.get("content")
+                    if content is not None:
+                        yield content
     else:
         raise BaseException(LLM_NO_RESPONSE_ERROR.format(response), "")
 
 
-def chat_normal(user_input, system_input="", model=DEFAULT_MODEL):
+def chat_normal(user_input, system_input="", model=""):
     """构建请求的 payload"""
     data = {
         "model": model,  # 选择大模型，替换为实际模型标识
@@ -62,7 +65,9 @@ def chat_normal(user_input, system_input="", model=DEFAULT_MODEL):
 
     try:
         # 发送 API 请求
+        logger.info("response=====发请求")
         response = requests.post(API_URL, json=data)
+        logger.info("response====={response}")
         response.raise_for_status()  # 检查请求是否成功
 
         # 返回模型生成的回复
@@ -86,7 +91,7 @@ def chat_normal(user_input, system_input="", model=DEFAULT_MODEL):
         return None
 
 
-def chat_prompt(prompt_type, params, model=DEFAULT_MODEL):
+def chat_prompt(prompt_type, params, model):
     """chat_prompt"""
     data = {
         "model": model,  # 选择大模型，替换为实际模型标识

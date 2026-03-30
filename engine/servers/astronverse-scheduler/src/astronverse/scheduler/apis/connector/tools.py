@@ -56,12 +56,13 @@ class BrowserType(Enum):
     CHROME = "CHROME"
 
 
-class ContractFactors(Enum):
+class ContractFactors(BaseModel):
     contract_type: InputType = InputType.TEXT
     contract_path: str = ""
     contract_content: str = ""
     custom_factors: str = ""
     contract_validate: str = ""
+    model: str = ""
 
 
 class CheckBrowserPlugin(BaseModel):
@@ -421,7 +422,7 @@ def send_alert(sub_window_data: dict, svc: Svc = Depends(get_svc)):
 @router.post("/validate/contract")
 def validate_contract(params: ContractFactors, svc: Svc = Depends(get_svc)):
     logger.info(f"params: {params}")
-    get_factors(
+    result = get_factors(
         params.contract_type,
         params.contract_path,
         params.contract_content,
@@ -429,7 +430,24 @@ def validate_contract(params: ContractFactors, svc: Svc = Depends(get_svc)):
         params.contract_validate,
         svc.rpa_route_port,
     )
-    return res_msg(code=ResCode.SUCCESS, msg="", data=None)
+    try:
+        parsed_result = json.loads(result)
+    except json.JSONDecodeError:
+        parsed_result = {}
+
+    if isinstance(parsed_result, dict):
+        data = [
+            {
+                "key": str(idx),
+                "name": str(name),
+                "content": "；".join(map(str, content)) if isinstance(content, list) else str(content),
+            }
+            for idx, (name, content) in enumerate(parsed_result.items())
+        ]
+    else:
+        data = [{"key": "0", "name": "原始结果", "content": str(result)}]
+
+    return res_msg(code=ResCode.SUCCESS, msg="", data=data)
 
 
 @router.post("/clipboard")

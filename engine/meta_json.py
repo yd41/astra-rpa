@@ -203,7 +203,8 @@ if __name__ == "__main__":
 
     remote_meta = get_remote_meta()
 
-    if local_meta and remote_meta:
+    # Allow an empty remote list (`[]`) so first-time initialization can still merge and upload meta.
+    if local_meta is not None and remote_meta is not None:
         choice = input("Do you want to merge local meta with remote meta? (Y/N): ").strip().lower()
         if choice == "y":
             merge_local_and_remote(local_meta, remote_meta)

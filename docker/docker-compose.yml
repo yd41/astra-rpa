@@ -14,8 +14,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD}
       MYSQL_DATABASE: ${DATABASE_NAME}
     env_file: *env_file
-    # ports:
-    #  - "${DATABASE_PORT}:3306"
+    ports:
+     - "${DATABASE_PORT}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./volumes/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
@@ -35,9 +35,10 @@ services:
         done;
         
         echo 'MySQL is up! Running incremental scripts...';
-        
+         
         for f in /docker-entrypoint-initdb.d/*.sql; do
-          if [[ \"\$$f\" != *\"01-schema.sql\" ]]; then
+          # Keep schema and one-time seed scripts from being replayed on every MySQL restart.
+          if [[ \"\$$f\" != *\"01-schema.sql\" && \"\$$f\" != *\"06-init_data.sql\" ]]; then
             echo \"Running \$$f ...\";
             mysql -u root -p'${DATABASE_PASSWORD}' ${DATABASE_NAME} < \"\$$f\";
           fi
@@ -91,8 +92,8 @@ services:
       - REDIS_PORT_NUMBER=${REDIS_PORT}
       - REDIS_IO_THREADS=4
       - ALLOW_EMPTY_PASSWORD=yes
-    # ports:
-    #  - "${REDIS_PORT}:6379"
+    ports:
+     - "${REDIS_PORT}:6379"
     volumes:
       - ./data/bitnami/redis:/bitnami/redis/data:rw,Z
     command: >
@@ -219,8 +220,8 @@ services:
       - REDIS_URL=redis://${REDIS_HOST}:${REDIS_PORT}/${REDIS_DB}
       - AICHAT_BASE_URL=${AICHAT_BASE_URL}
       - AICHAT_API_KEY=${AICHAT_API_KEY}
-    # ports:
-    #   - "8010:8010"
+    ports:
+      - "8010:8010"
     volumes:
       - ../backend/ai-service/app:/app/app
     depends_on:

@@ -190,3 +190,6 @@ async def speech_tts(
     except httpx.HTTPError as exc:
         logger.error(f"Speech TTS network error: {exc}")
         raise HTTPException(status_code=503, detail="Speech service is temporarily unavailable.")
+    except Exception as exc:
+        logger.exception(f"Speech TTS unexpected error: {exc}")
+        raise HTTPException(status_code=500, detail=f"Speech TTS internal error: {exc}")

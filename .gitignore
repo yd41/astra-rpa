@@ -1,0 +1,41 @@
+# Repository-level caches
+/.uv-cache/
+/.venv/
+/venv/
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
+/.coverage
+/.coverage.*
+/.claude/
+
+# Root build outputs
+/build/
+/build/python_core/
+
+# Generated archives in repository resources
+/resources/python_core.7z
+/resources/python_core.7z.sha256.txt
+/resources/conf.yaml
+/resources/conf copy.yaml
+/resources/conf
+
+# Build scripts
+/build.bat
+
+# Local Docker runtime data
+/docker/data/
+/docker/logs/
+/docker/.env
+
+# Python cache artifacts outside subproject rules
+
+__pycache__/
+*.py[cod]
+
+# Local environment and editor noise at repository root
+/.env
+/.env.*
+/.idea/
+/.vscode/
+.DS_Store

@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from app.config import get_settings
 from app.dependencies.points import PointChecker, PointsContext
@@ -11,9 +11,9 @@ from app.schemas.ocr import (
     DocumentOCRRequest,
     DocumentOCRResponse,
     IDCardOCRResponse,
+    OCRGeneralDecodedResponseBody,
     OCRGeneralRequestBody,
-    OCRGeneralResponseBody,
-    PDFOCRResponse,
+    PDFOCRResponseBody,
     TicketOCRRequest,
     TicketOCRResponse,
     VATInvoiceOCRResponse,
@@ -37,6 +37,14 @@ router = APIRouter(
 )
 
 
+def _wrap_specialized_ocr_result(data: dict) -> dict:
+    return {
+        "code": "0",
+        "desc": "success",
+        "data": data,
+    }
+
+
 async def _raise_ocr_http_error(prefix: str, error: OCRError, points_context: PointsContext | None = None) -> None:
     if points_context and error.should_deduct_points:
         await points_context.deduct_points()
@@ -45,7 +53,7 @@ async def _raise_ocr_http_error(prefix: str, error: OCRError, points_context: Po
     raise HTTPException(status_code=error.status_code, detail=f"{prefix} failed: {error.message}")
 
 
-@router.post("/general", response_model=OCRGeneralResponseBody)
+@router.post("/general", response_model=OCRGeneralDecodedResponseBody)
 async def general_ocr(
     params: OCRGeneralRequestBody,
     points_context: PointsContext = Depends(
@@ -63,13 +71,8 @@ async def general_ocr(
             "message": "success",
             "sid": "ase000d1688@hu17b34308ea40210882"
           },
-          "payload": {
-            "result": {
-              "compress": "raw",
-              "encoding": "utf8",
-              "format": "json",
-              "text": "ewogImNhdGVnb3J5IjogImNoX2VuX3B1YmxpY19jbG91ZC..."
-            }
+          "data": {
+            "...": "decoded OCR result"
           }
         }
 
@@ -157,8 +160,9 @@ async def document_ocr(
         raise HTTPException(status_code=500, detail="An unexpected error occurred during Document OCR")
 
 
-@router.post("/pdf", response_model=PDFOCRResponse)
+@router.post("/pdf", response_model=PDFOCRResponseBody)
 async def pdf_ocr(
+    request: Request,
     file: UploadFile = File(None),
     pdf_url: str = Form(None),
     export_format: str = Form("json"),
@@ -177,12 +181,18 @@ async def pdf_ocr(
         export_format: 导出格式 (word, markdown, json)
 
     Returns:
-        PDFOCRResponse: 任务信息和识别结果
+        PDFOCRResponseBody: 包含 payload 的任务信息
 
     Raises:
         HTTPException: 400/500/503 错误
     """
     try:
+        if not pdf_url and "application/json" in (request.headers.get("content-type") or "").lower():
+            body = await request.json()
+            if isinstance(body, dict):
+                pdf_url = body.get("pdf_url") or pdf_url
+                export_format = body.get("export_format") or export_format
+
         if not file and not pdf_url:
             raise HTTPException(status_code=400, detail="Either file or pdf_url must be provided")
 
@@ -195,11 +205,14 @@ async def pdf_ocr(
             await points_context.deduct_custom_points(points_to_deduct)
             logger.info(f"PDF OCR completed, {result.page_count} pages, deducted {points_to_deduct} points")
 
-        return result
+        return {"payload": result}
 
     except OCRError as e:
         logger.error(f"PDF OCR business logic error: {e.message}")
         await _raise_ocr_http_error("PDF OCR", e)
+
+    except HTTPException:
+        raise
 
     except httpx.HTTPError as e:
         logger.error(f"PDF OCR service network error: {e}")
@@ -286,12 +299,13 @@ async def business_card_ocr(
     try:
         client = BusinessCardOCRClient()
         result = await client.recognize(file)
+        logger.info(f"Business card OCR raw result: {result}")
 
         # 成功时扣除积分
         await points_context.deduct_points()
         logger.info("Business card OCR processing successful, points deducted")
 
-        return result
+        return _wrap_specialized_ocr_result(result)
 
     except OCRError as e:
         logger.error(f"Business card OCR business logic error: {e.message}")
@@ -338,7 +352,7 @@ async def id_card_ocr(
         await points_context.deduct_points()
         logger.info("ID card OCR processing successful, points deducted")
 
-        return result
+        return _wrap_specialized_ocr_result(result)
 
     except OCRError as e:
         logger.error(f"ID card OCR business logic error: {e.message}")
@@ -385,7 +399,7 @@ async def bank_card_ocr(
         await points_context.deduct_points()
         logger.info("Bank card OCR processing successful, points deducted")
 
-        return result
+        return _wrap_specialized_ocr_result(result)
 
     except OCRError as e:
         logger.error(f"Bank card OCR business logic error: {e.message}")
@@ -432,7 +446,7 @@ async def business_license_ocr(
         await points_context.deduct_points()
         logger.info("Business license OCR processing successful, points deducted")
 
-        return result
+        return _wrap_specialized_ocr_result(result)
 
     except OCRError as e:
         logger.error(f"Business license OCR business logic error: {e.message}")
@@ -479,7 +493,7 @@ async def vat_invoice_ocr(
         await points_context.deduct_points()
         logger.info("VAT invoice OCR processing successful, points deducted")
 
-        return result
+        return _wrap_specialized_ocr_result(result)
 
     except OCRError as e:
         logger.error(f"VAT invoice OCR business logic error: {e.message}")
